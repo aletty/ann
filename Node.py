@@ -1,13 +1,16 @@
+from Edge import Edge
+from math import tanh as tanh
+
 class Node(object):
 	def __init__(self):
 		self.inputEdges = []
-		raise NotImplementedError
+		self.outputEdges = []
 
-	def addInputEdge(self, node):
-		raise NotImplementedError
+	def addInputEdge(self, edge):
+		self.inputEdges.append(edge)
 
-	def addOutputEdge(self, node):
-		raise NotImplementedError
+	def addOutputEdge(self, edge):
+		self.outputEdges.append(edge)
 
 	def __call__(self):
 		val = 0
@@ -17,4 +20,4 @@ class Node(object):
 		val = self.activationFunction(val)
 
 	def activationFunction(val):
-		raise NotImplementedError
+		return (tanh(val)+1)/2

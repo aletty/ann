@@ -1,3 +1,5 @@
+from Node import Node
+
 class Edge(object):
 	def __init__(self, nodeIn, nodeOut, weight=.1):
 		self.nodeIn = nodeIn
