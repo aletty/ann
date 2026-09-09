@@ -42,7 +42,7 @@ jobs:
             const CODEX_BOT = 'chatgpt-codex-connector[bot]';
             const SUMMARY_MARKER = '<!-- codex-pull-request-review-summary -->';
             function isReviewRequest(body) {
-              const clean = (body || '').replace(/```[\s\S]*?```/g, '').replace(/~~~[\s\S]*?~~~/g, '');
+              const clean = (body || '').replace(/<!--[\s\S]*?-->/g, '').replace(/```[\s\S]*?```/g, '').replace(/~~~[\s\S]*?~~~/g, '');
               return /^@codex\s+(?:security\s+)?review\b/im.test(clean);
             }
             function codexReview(comments, reactions) {
@@ -59,10 +59,10 @@ jobs:
               }
               const completedAt = Math.max(0, ...summaries.map(c => Date.parse(c.updated_at) || 0));
               const requests = comments.filter(c => c.authorizedRequest === true && isReviewRequest(c.body));
-              if (requests.some(c => (Date.parse(c.created_at) || Infinity) > completedAt))
+              if (requests.some(c => (Date.parse(c.updated_at || c.created_at) || Infinity) >= completedAt))
                 return {ok:false, message:'A Codex review was requested; waiting for the bot completion summary.'};
               const eyes = reactions.filter(r => r.user?.login === CODEX_BOT && r.user?.type === 'Bot' && r.content === 'eyes');
-              if (eyes.some(r => !completedAt || (Date.parse(r.created_at) || Infinity) > completedAt))
+              if (eyes.some(r => !completedAt || (Date.parse(r.created_at) || Infinity) >= completedAt))
                 return {ok:false, message:'Codex is reviewing (eyes reaction); wait for completion.'};
               return {ok:true, message:summaries.length ? 'Codex review completed; findings are advisory.' : 'No active Codex review detected.'};
             }
@@ -179,6 +179,9 @@ jobs:
                     comment.authorizedRequest = permissions.get(username);
                   }
                   const reactions = await github.paginate(github.rest.reactions.listForIssue, {...args, issue_number:p.number, per_page:100});
+                  for (const comment of comments.filter(c => c.reactions?.eyes > 0)) {
+                    reactions.push(...await github.paginate(github.rest.reactions.listForIssueComment, {...args, comment_id:comment.id, per_page:100}));
+                  }
                   codex[p.number] = codexReview(comments, reactions);
                 }
                 return {repository, defaultBranch:repositoryData.default_branch, pulls, stacks, ancestors:{}, codex};

@@ -73,13 +73,14 @@ test('human cannot spoof completion or active bot status',()=>{
 });
 test('eyes-only review blocks and completion supersedes earlier eyes',()=>{
  const r={user:bot,content:'eyes',created_at:at};assert.equal(codexReview([],[r]).ok,false);
- assert.equal(codexReview([summary()],[r]).ok,true);
+ assert.equal(codexReview([summary()],[r]).ok,false);
+ const done=summary();done.updated_at=later;assert.equal(codexReview([done],[r]).ok,true);
  assert.equal(codexReview([summary()],[{...r,created_at:later}]).ok,false);
 });
 test('new manual review requests block even after previous completion',()=>{
  for(const body of ['@codex review','@codex security review']) {
   const r={body,created_at:later,authorizedRequest:true};assert.equal(codexReview([summary(),r],[]).ok,false);
-  r.created_at=at;assert.equal(codexReview([summary(),r],[]).ok,true);
+  r.created_at='2026-09-09T00:59:59Z';assert.equal(codexReview([summary(),r],[]).ok,true);
  }
 });
 test('no requested or active review passes',()=>assert.equal(codexReview([],[]).ok,true));
@@ -118,4 +119,20 @@ test('controller checks repository permission before accepting a manual request'
   h.github.paginate=async(route,args)=>route===h.github.rest.issues.listComments ? [summary(),{body:'@codex review',created_at:later,user:{login:'visitor',type:'User'}}] : paginate(route,args);
   await run(h);assert.equal(h.failures.length,0);assert.equal(h.updates.at(-1).conclusion,permission==='write'?'failure':'success');
  }
+});
+
+test('timestamp ties and edited requests stay blocked',()=>{
+ assert.equal(codexReview([summary(),{body:'@codex review',created_at:at,authorizedRequest:true}],[]).ok,false);
+ assert.equal(codexReview([summary(),{body:'@codex review',created_at:'2026-09-08T00:00:00Z',updated_at:later,authorizedRequest:true}],[]).ok,false);
+ assert.equal(codexReview([summary(),{body:'<!--\n@codex review\n-->',created_at:later,authorizedRequest:true}],[]).ok,true);
+});
+test('controller detects authenticated eyes on triggering comments',async()=>{
+ const h=harness();const paginate=h.github.paginate;
+ h.github.rest.reactions.listForIssueComment=Symbol('commentReactions');
+ h.github.paginate=async(route,args)=>{
+  if(route===h.github.rest.issues.listComments)return [{id:123,body:'legacy request',reactions:{eyes:1}}];
+  if(route===h.github.rest.reactions.listForIssueComment)return [{user:bot,content:'eyes',created_at:at}];
+  return paginate(route,args);
+ };
+ await run(h);assert.equal(h.failures.length,0);assert.equal(h.updates.at(-1).conclusion,'failure');
 });
